@@ -1,0 +1,224 @@
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include <math.h>
+
+char * generateKey();
+void generateRoundKey(unsigned char *);
+void RoundKeysPC2function(unsigned char *, unsigned char *);
+
+
+int main(int argc, char *argv[]){
+    
+    srand(time(NULL));
+
+    //generate the key
+    unsigned char * key = generateKey();
+
+    //generate the round keys
+    generateRoundKey(key);
+
+
+    return 0;
+}
+
+char * generateKey(){
+    //needs to be a 64 bit (8 byte) pseudo random number
+    //in C, a char is one byte, so I will represent the key as an array of 8 chars
+    //https://stackoverflow.com/questions/15621764/generate-a-random-byte-stream
+    
+    unsigned char  * key = (unsigned char*)malloc(sizeof(char)*8);
+
+    for(int i=0; i < 8; i++){
+        int val = (int) rand() % 256;
+        key[i] = val;
+    }
+    
+    /* uncomment to view the value of the key
+    for(int i=0; i < 8; i++){
+        printf("%02x ", key[i]);
+    }*/
+    
+    return key;
+}
+
+/*
+* This function is the start of the key schedule
+* This function only computes the PC1 and splits the key into a left and right half, other functions take care of other work for the round keys (pc2)
+* A more flexible and fragmented approach (generating each round key individually) would probably be better
+*/
+void generateRoundKey(unsigned char * key){
+    //Need to generate 16 round keys
+    //return an array of 16 round keys
+    //each round key is 48 bits (6 bytes)
+
+    //create the data structure that will hold the 16 round keys
+    //can be thought of as a 16 x 6 array of bytes
+    unsigned char * roundKeys = (unsigned char *)malloc(sizeof(char)*96);
+
+    //split the encryption key into two halves
+    //yeah this is what happens when you use your noggin
+    unsigned char * leftHalf = (unsigned char *)malloc(sizeof(char)*4);
+    unsigned char * rightHalf = (unsigned char *)malloc(sizeof(char)*4);
+
+    //PC1 is a fixed/deterministic operation, so it must be hard coded
+    // :(
+    int pc1LeftIndices[] = {57, 49, 41, 33, 25, 17, 9,
+                            1, 58, 50, 42, 34, 26, 18,
+                            10, 2, 59, 51, 43, 35, 27, 
+                            19, 11, 3, 60, 52, 44, 36};
+    
+    int pc1RightIndices[] = {63, 55, 47, 39, 31, 23, 15,
+                            7, 62, 54, 46, 38, 30, 22,
+                            14, 6, 61, 53, 45, 37, 29,
+                            21, 13, 5, 28, 20, 12, 4};
+
+    //each half of the key is only 28 bits after the pc1. So, the last 4 bits must be discarded (they are zero)
+
+    //left half pc1
+    for(int i=0; i<28; i++){
+        //get the index
+        int bit = pc1LeftIndices[i];
+
+        //get the bit from the key
+        int bitValue = key[(int) floor(bit/8)] >> (7 - (bit%8));
+        bitValue &= 0x01;
+
+        leftHalf[(int) floor(i/8)] <<= 1;
+        leftHalf[(int) floor(i/8)] += bitValue;
+    }
+    //Important! -- only the last four bits of the last byte are needed, but the order is wrong!
+    //need to correct this
+    leftHalf[3] <<= 4;
+    //Only now, the last 4 bits of the left half can be disregarded - because the left half only needs to be 28 bits, but the minumum size available is 32 bits
+
+    //right half pc1
+    //just repeat what was done for the left half, but for the right half
+    for(int i=0; i < 28; i++){
+        int bit = pc1RightIndices[i];
+        int bitValue = key[(int) floor(bit/8)] >> (7 - (bit%8));
+        bitValue &= 0x01;
+
+        rightHalf[(int) floor(i/8)] <<= 1;
+        rightHalf[(int) floor(i/8)] += bitValue;
+    }
+    rightHalf[3] <<= 4;
+
+    
+    printf("key\n");
+    for(int i=0; i<8; i++){
+        printf("%02x ", key[i]);
+    }
+    printf("\nleft half\n");
+    for(int i=0; i<4; i++){
+        printf("%02x ", leftHalf[i]);
+    }
+    printf("\nright half\n");
+    for(int i=0; i<4; i++){
+        printf("%02x ", rightHalf[i]);
+    }
+    printf("\n");
+
+    //now move to another function to use PC2 for the round keys
+    //starting at round 1
+    RoundKeysPC2function(leftHalf, rightHalf);
+}
+
+
+void RoundKeysPC2function(unsigned char * leftHalf, unsigned char * rightHalf){
+
+    //repeat for 16 rounds
+    int pc2indices[] = {14, 7, 11, 24, 1, 5,
+                    3, 28, 15, 6, 21, 10,
+                    23, 19, 12, 4, 26, 8, 
+                    16, 7, 27, 20, 13, 2,
+                    41, 52, 31, 37, 47, 55,
+                    30, 40, 51, 45, 33, 48,
+                    44, 49, 39, 56, 34, 53, 
+                    46, 42, 50, 36, 29, 32};
+
+    int shift;
+    for(int round=0; round<16; round++){
+
+        if(round == 1 ||  round == 2 || round == 9 || round == 16){
+            shift = 1;
+        }
+        else{
+            shift = 2;
+        }
+
+
+        //Endianness is reversed on my computer, so need to flip it back
+        // :o
+        //hard coded
+        //thanks to https://stackoverflow.com/questions/2182002/how-to-convert-big-endian-to-little-endian-in-c-without-using-library-functions
+        int temp = *(int*)leftHalf;
+        int INTleftHalf = ((temp>>24)&0xff | 
+            (temp<<8)&0xff0000 | 
+            (temp>>8)&0xff00 | 
+            (temp<<24)&0xff000000);
+
+        temp = *(int*)rightHalf;
+        int INTrightHalf = ((temp>>24)&0xff | 
+            (temp<<8)&0xff0000 | 
+            (temp>>8)&0xff00 | 
+            (temp<<24)&0xff000000);
+    
+
+        
+        //firstly, shift the left and right halves
+        temp = shift == 1 ? (INTleftHalf&0x80000000)>>27 : (INTleftHalf&0xC0000000)>>26;
+        INTleftHalf = temp + (INTleftHalf << shift);
+        leftHalf = (char*)&INTleftHalf;
+        rightHalf = (char*)&INTrightHalf;
+
+        printf("\n rotated left half please \n");
+        printf("%x",INTleftHalf);
+        
+        temp = shift == 1 ? (INTrightHalf&0x80000000)>>27 : (INTrightHalf&0xC0000000)>>26;
+        INTrightHalf = temp + (INTrightHalf << shift);
+        //printf("\n left %x right %x \n", INTleftHalf, INTrightHalf);
+        //join the left and right half to make it easier
+        unsigned long beforeRoundKey = (((unsigned long)INTleftHalf)<<32) | (((unsigned long)INTrightHalf)<<4)&0x0000000fffffffff;
+        //cast back to char * to make it easier
+        //endianness was reversed when casting, so reverse the endianness
+        unsigned char * temp2 = (unsigned char *)malloc(sizeof(char)*8);
+        temp2[7] = *(unsigned char *)&beforeRoundKey;
+        temp2[6] = *((unsigned char *)&beforeRoundKey+1);
+        temp2[5] = *((unsigned char *)&beforeRoundKey+2);
+        temp2[4] = *((unsigned char *)&beforeRoundKey+3);
+        temp2[3] = *((unsigned char *)&beforeRoundKey+4);
+        temp2[2] = *((unsigned char *)&beforeRoundKey+5);
+        temp2[1] = *((unsigned char *)&beforeRoundKey+6);
+        temp2[0] = *((unsigned char *)&beforeRoundKey+7);
+
+
+        /* uncomment to view the value of temp
+        printf("\n");
+        for(int i=0; i<8; i++){
+            printf("%02x ", temp2[i]);
+        }*/
+
+        //now, do pc2 
+        //cannot do the naive approach, because the table for pc2 is "row major" so some additional calculations are necessary
+        unsigned char * roundKey = (unsigned char *)malloc(sizeof(char)*6);
+        for(int i=0; i<48; i++){
+            int bit = pc2indices[i];
+            int value = temp2[(int) floor(bit/8)] >> (7 - (bit%8));
+            value &= 0x01;
+
+            roundKey[(int) floor(i/8)] <<=1;
+            roundKey[(int) floor(i/8)] += value;
+        }
+
+        printf("\n this is the round key\n");
+        for(int i=0; i<6; i++){
+            printf("%02x ", roundKey[i]);
+        }
+        printf("\n");
+    }
+
+    
+}
