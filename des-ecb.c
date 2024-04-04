@@ -10,6 +10,7 @@ unsigned long permutedChoiceOne(unsigned long);
 unsigned long permutedChoiceTwo(unsigned long);
 unsigned long shiftRoundKey(unsigned long, int);
 unsigned long * GenerateRoundKeys(unsigned long);
+unsigned long * getUserPlaintext(int *);
 
 int main(int argc, char *argv[]){
     
@@ -20,6 +21,14 @@ int main(int argc, char *argv[]){
     //generate the key for the first round
     //key = shiftRoundKey(key, 1);
     unsigned long * roundKeys = GenerateRoundKeys(key);
+
+    
+    int NumberOfPlaintextBlocks;
+    unsigned long * testingText = getUserPlaintext(&NumberOfPlaintextBlocks);
+    /*for(int i=0; i<NumberOfPlaintextBlocks; i++){
+        printf("\n %016lx",*(testingText+i));
+    }*/
+
     return 0;
 }
 
@@ -192,5 +201,60 @@ unsigned long permutedChoiceTwo(unsigned long key){
     //printf("\n the key after PC2 %016lx\n", permutedKey);
     //love to see it :)
     return permutedKey;
+}
+
+unsigned long * getUserPlaintext(int * PointerToNumOfPlaintextBlocks){
+
+    
+    //Due to ascii encoding, a character can be stored as a byte so the input length in bytes is the same as strlen of the input
+    char input[400];
+
+    printf("Enter plaintext ");
+    //The user will not be allowed to use the whole input buffer, so that padding will always be possible
+    fgets(input, sizeof(input)-8, stdin);
+
+    //a common issue when using the fgets function, the last character in the string will be '\n' which needs to be replaced with 0
+    input[strlen(input)-1] = 0;
+
+    printf("\nThe input was %s\n", input);
+    printf("String length is %ld which is %ld bits", strlen(input), strlen(input)*8);
+    
+    //add padding
+    int paddingNeeded = 8 - strlen(input)%8;
+    unsigned char paddingValue[] = {paddingNeeded,0};
+    //printf("\n The input length is %ld which needs padding of %02x,",strlen(input), paddingValue);
+    for(int i=0; i < paddingNeeded; i++){
+        strcat(input, paddingValue);
+    }
+
+    //printf("\n AFTER PADDING THE LENGTH IS %ld WHICH NEEDS %ld BLOCKS", strlen(input), strlen(input)/8);
+    int NumberOfPlaintextBlocks = strlen(input)/8;
+    *PointerToNumOfPlaintextBlocks = NumberOfPlaintextBlocks;
+    unsigned long * plaintextBlocks = (unsigned long *)malloc(sizeof(unsigned long)*NumberOfPlaintextBlocks);
+
+    /*for(int i=0; i<strlen(input); i++){
+
+        printf("\n character is %c which is %d same as %x",input[i], input[i], input[i]);
+
+    }*/
+
+    //convert the plaintext into blocks of 8 bytes(64 bits)
+    //Need to manually reverse the endianness because my cpu uses little endian
+    unsigned long * pointer = (unsigned long *)input;
+    unsigned long block = 0x0000000000000000;
+    for(int i=0; i < strlen(input)/8; i++){
+        unsigned long temp = *(pointer + i);
+        for(int j=0; j<8; j++){
+            block <<= 8;
+            block += *(((unsigned char *)&temp)+j);
+        }
+        
+        //add the block to the list of plaintext blocks
+        *(plaintextBlocks+i) = block;
+    }
+
+    //return the plaintext blocks
+    return plaintextBlocks;
+
 }
 
