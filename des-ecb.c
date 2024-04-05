@@ -13,6 +13,8 @@ unsigned long * GenerateRoundKeys(unsigned long);
 unsigned long * getUserPlaintext(int *);
 unsigned long * initialPermutation(int, unsigned long *);
 unsigned long * finalPermutation(int, unsigned long *);
+unsigned int feistelFunction(unsigned int, unsigned long);
+unsigned long feistelExpansion(unsigned int);
 
 int main(int argc, char *argv[]){
     
@@ -31,7 +33,13 @@ int main(int argc, char *argv[]){
         printf("\n %016lx",*(testingText+i));
     }*/
 
-    initialPermutation(NumberOfPlaintextBlocks, plaintextBlocks);
+    plaintextBlocks = initialPermutation(NumberOfPlaintextBlocks, plaintextBlocks);
+
+    //test the feistel expansion function
+    unsigned int rightHalf = *(unsigned int *)plaintextBlocks;
+    feistelExpansion(rightHalf);
+
+
     return 0;
 }
 
@@ -356,3 +364,41 @@ unsigned long * finalPermutation(int numBlocks, unsigned long * block){
     return outputBlocks;
 }
 
+
+//The input to the feistel function is a 32 bit half block and a 48 bit round key
+//The output is a 32 bit half block which is used in the next round
+unsigned int feistelFunction(unsigned int halfBlock, unsigned long roundKey){
+    //first, the half block needs to be expanded to 48 bits
+    //Then, XOR the half block with the the roundKey
+    //Then, do S-boxes
+    //Then, do the feistel permutation
+}
+
+//The input to the feistel expansion function is a 32 bit half block
+//the output is a 48 bit sequence
+//The 48 bits have to be represented with a 64 bit long, so there will be 4 bytes of zeros at the front (32 leading 0s)
+unsigned long feistelExpansion(unsigned int halfBlock){
+    
+    int expansionBits[] = {32, 1, 2, 3, 4, 5,
+                        4, 5, 6, 7, 8, 9,
+                        8, 9, 10, 11, 12, 13,
+                        12, 13, 14, 15, 16, 17,
+                        16, 17, 18, 19, 20, 21,
+                        20, 21, 22, 23, 24, 25,
+                        24, 25, 26, 27, 28, 29,
+                        28, 29, 30, 31, 32, 1};
+
+    unsigned long expansionResult = 0x0000000000000000;
+    unsigned char * pointer = (unsigned char *)&halfBlock;
+    for(int i=0; i<48; i++){
+        int bit = expansionBits[i];
+        bit--;
+        unsigned char bitValue = pointer[3 - (int)floor(bit/8)];
+        bitValue >>= 7 - (bit%8);
+        bitValue &= 0x01;
+        expansionResult <<= 1;
+        expansionResult += bitValue;
+    }
+    printf("\n the expansion result is %016lx ", expansionResult);
+    //return expansionResult;
+}
