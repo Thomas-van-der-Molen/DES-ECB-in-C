@@ -11,7 +11,8 @@ unsigned long permutedChoiceTwo(unsigned long);
 unsigned long shiftRoundKey(unsigned long, int);
 unsigned long * GenerateRoundKeys(unsigned long);
 unsigned long * getUserPlaintext(int *);
-unsigned long * InitialPermutation(int, unsigned long *);
+unsigned long * initialPermutation(int, unsigned long *);
+unsigned long * finalPermutation(int, unsigned long *);
 
 int main(int argc, char *argv[]){
     
@@ -30,7 +31,7 @@ int main(int argc, char *argv[]){
         printf("\n %016lx",*(testingText+i));
     }*/
 
-    InitialPermutation(NumberOfPlaintextBlocks, plaintextBlocks);
+    initialPermutation(NumberOfPlaintextBlocks, plaintextBlocks);
     return 0;
 }
 
@@ -269,7 +270,7 @@ unsigned long * getUserPlaintext(int * PointerToNumOfPlaintextBlocks){
     The function returns the same data structure as the "block" input - a pointer representing an array of 8 byte blocks after the initial permutation is done
     My implementation of DES is electronic code book mode, so each block is just treated separately for simplicity
 */
-unsigned long * InitialPermutation(int numBlocks, unsigned long * block){
+unsigned long * initialPermutation(int numBlocks, unsigned long * block){
 
     int ipIndices[] = {58, 50, 42, 34, 26, 18, 10, 2,
                     60, 52, 44, 36, 28, 20, 12, 4,
@@ -303,10 +304,55 @@ unsigned long * InitialPermutation(int numBlocks, unsigned long * block){
             outputBlock <<= 1;
             outputBlock += bitValue;
             
-            //outputBlocks[b] = outputBlock
+            outputBlocks[b] = outputBlock;
 
         }
-        printf("\n the input %016lx the output %016lx",blockInput, outputBlock);
+        
     }
     
+    return outputBlocks;
 }
+
+unsigned long * finalPermutation(int numBlocks, unsigned long * block){
+
+    int ipIndices[] = {40, 8, 48, 16, 56, 24, 64, 32,
+                    39, 7, 47, 15, 55, 23, 63, 31,
+                    38, 6, 46, 14, 54, 22, 62, 30,
+                    37, 5, 45, 13, 53, 21, 61, 29,
+                    36, 4, 44, 12, 52, 20, 60, 28,
+                    35, 3, 43, 11, 51, 19, 59, 27,
+                    34, 2, 42, 10, 50, 18, 58, 26,
+                    33, 1, 41, 9, 49, 17, 57, 25};
+
+    unsigned long * outputBlocks = (unsigned long *)malloc(sizeof(unsigned long)*numBlocks);
+    //ECB mode, need to do the initial permutation for all blocks, but separately
+    for(int b=0; b<numBlocks; b++){
+        unsigned long blockInput = *(block+b);
+        unsigned long outputBlock = 0x0000000000000000;
+
+        for(int i=0; i<64; i++){
+
+            int bit = ipIndices[i];
+            //DES algorithm starts counting bits at 1 but it is easier to start counting at 0, so just subtract 1 from what the bit should be
+            bit--;
+            unsigned char * pointer = (unsigned char *)&blockInput;
+            unsigned char bitValue = pointer[7 - (int)floor(bit/8)];
+            //printf(" \n byte %d is %x ", 7-(int)floor(bit/8), bitValue);
+            //printf("\n want bit %d which is in byte %d which is %02x", bit, (int)floor(bit/8), bitValue);
+
+            //again, it is best to start counting bits at 0, rather than 1 so shift left by 7, rather than 8
+            bitValue >>= 7 - (bit%8);
+            bitValue &= 0x01;
+
+            outputBlock <<= 1;
+            outputBlock += bitValue;
+            
+            outputBlocks[b] = outputBlock;
+
+        }
+        
+    }
+    
+    return outputBlocks;
+}
+
