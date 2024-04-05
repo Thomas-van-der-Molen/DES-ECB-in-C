@@ -15,6 +15,7 @@ unsigned long * initialPermutation(int, unsigned long *);
 unsigned long * finalPermutation(int, unsigned long *);
 unsigned int feistelFunction(unsigned int, unsigned long);
 unsigned long feistelExpansion(unsigned int);
+unsigned int sBoxes(unsigned long);
 
 int main(int argc, char *argv[]){
     
@@ -37,7 +38,12 @@ int main(int argc, char *argv[]){
 
     //test the feistel expansion function
     unsigned int rightHalf = *(unsigned int *)plaintextBlocks;
-    feistelExpansion(rightHalf);
+    unsigned long temp2 = feistelExpansion(rightHalf);
+
+
+    unsigned long temp = (*roundKeys)^(temp2);
+    printf("\n %016lx xor %016lx is %016lx ",*roundKeys, temp2, temp);
+    sBoxes(temp);
 
 
     return 0;
@@ -129,8 +135,9 @@ unsigned long * GenerateRoundKeys(unsigned long key){
 
     //There are 16 round keys
     //to make it easier, roundKeys[0] will store the initial key
-    unsigned long roundKeys[16];
-    roundKeys[0] = key;
+    unsigned long * roundKeys = (unsigned long *)malloc(sizeof(unsigned long)*16);
+    unsigned long temp[16];
+    temp[0] = key;
     //printf("\n The input key is %016lx \n", key);
     
     for(int round=1; round<17; round++){
@@ -147,17 +154,17 @@ unsigned long * GenerateRoundKeys(unsigned long key){
         }
 
         //start by shifting the previous round key by the correct amount
-        roundKeys[round] = shiftRoundKey(roundKeys[round - 1], roundShiftAmount);
+        temp[round] = shiftRoundKey(temp[round - 1], roundShiftAmount);
         //printf("\nRound %d key - %016lx", round, roundKeys[round]);
         
         //next, each round key must be permuted using permutation choice 2, and then, finally, the round keys will be ready.
         //printf("\nRound %d key - %016lx", round, roundKeys[round]);
         //ERROR IN MY IMPLEMENTATION RIGHT HERE - THE OUTPUT FROM PC2 BECOME THE ROUND KEY BUT IS NOT USED IN THE CALCULATION OF THE NEXT KEY
         //EASY FIX DO IT ASAP
-        permutedChoiceTwo(roundKeys[round]);
+        roundKeys[round-1] = permutedChoiceTwo(temp[round]);
     }
 
-    //return roundKeys;
+    return roundKeys;
 }
 
 unsigned long permutedChoiceTwo(unsigned long key){
@@ -364,6 +371,9 @@ unsigned long * finalPermutation(int numBlocks, unsigned long * block){
     return outputBlocks;
 }
 
+void encrypt(int numBlocks, unsigned long * block){
+
+}
 
 //The input to the feistel function is a 32 bit half block and a 48 bit round key
 //The output is a 32 bit half block which is used in the next round
@@ -400,5 +410,142 @@ unsigned long feistelExpansion(unsigned int halfBlock){
         expansionResult += bitValue;
     }
     printf("\n the expansion result is %016lx ", expansionResult);
-    //return expansionResult;
+    return expansionResult;
+}
+
+//the input the the sBoxes function is the 48 bit half block after it has been expanded
+//The output is 32 bits which will then go through the permutation step
+unsigned int sBoxes(unsigned long input){
+
+    unsigned char sb1[][16] = {
+        {14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7},
+        {0, 15, 7, 4, 14, 2, 13, 1, 10, 6, 12, 11, 9, 5, 3, 8},
+        {4, 1, 14, 8, 13, 6, 2, 11, 15, 12, 9, 7, 3, 10, 5, 0},
+        {15, 12, 8, 2, 4, 9, 1, 7, 5, 11, 3, 14, 10, 0, 6, 13}
+    };
+
+    unsigned char sb2[][16] = {
+        {15, 1, 8, 14, 6, 11, 3, 4, 9, 7, 2, 13, 12, 0, 5, 10},
+        {3, 13, 4, 7, 15, 2, 8, 14, 12, 0, 1, 10, 6, 9, 11, 5},
+        {0, 14, 7, 11, 10, 4, 13, 1, 5, 8, 12, 6, 9, 3, 2, 15},
+        {13, 8, 10, 1, 3, 15, 4, 2, 11, 6, 7, 12, 0, 5, 14, 9}
+    };
+
+    unsigned char sb3[][16] = {
+        {10, 0, 9, 14, 6, 3, 15, 5, 1, 13, 12, 7, 11, 4, 2, 8},
+        {13, 7, 0, 9, 3, 4, 6, 10, 2, 8, 5, 14, 12, 11, 15, 1},
+        {13, 6, 4, 9, 8, 15, 3, 0, 11, 1, 2, 12, 5, 10, 14, 7},
+        {1,	10, 13, 0, 6, 9, 8, 7, 4, 15, 14, 3, 11, 5, 2, 12}
+
+    };
+
+    unsigned char sb4[][16] = {
+        {7, 13, 14, 3, 0, 6, 9, 10, 1, 2, 8, 5, 11, 12, 4, 15},
+        {13, 8, 11, 5, 6, 15, 0, 3, 4, 7, 2, 12, 1, 10, 14, 9},
+        {10, 6, 9, 0, 12, 11, 7, 13, 15, 1, 3, 14, 5, 2, 8, 4},
+        {3, 15, 0, 6, 10, 1, 13, 8, 9, 4, 5, 11, 12, 7, 2, 14}
+    };
+
+    unsigned char sb5[][16] = {
+        {2, 12, 4, 1, 7, 10, 11, 6, 8, 5, 3, 15, 13, 0, 14, 9},
+        {14, 11, 2, 12, 4, 7, 13, 1, 5, 0, 15, 10, 3, 9, 8, 6},
+        {4, 2, 1, 11, 10, 13, 7, 8, 15, 9, 12, 5, 6, 3, 0, 14},
+        {11, 8, 12, 7, 1, 14, 2, 13, 6, 15, 0, 9, 10, 4, 5, 3}
+    };
+
+    unsigned char sb6[][16] = {
+        {12, 1, 10, 15, 9, 2, 6, 8, 0, 13, 3, 4, 14, 7, 5, 11},
+        {10, 15, 4, 2, 7, 12, 9, 5, 6, 1, 13, 14, 0, 11, 3, 8},
+        {9, 14, 15, 5, 2, 8, 12, 3, 7, 0, 4, 10, 1, 13, 11, 6},
+        {4, 3, 2, 12, 9, 5, 15, 10, 11, 14, 1, 7, 6, 0, 8, 13}
+    };
+
+    unsigned char sb7[][16] = {
+        {4, 11, 2, 14, 15, 0, 8, 13, 3, 12, 9, 7, 5, 10, 6, 1},
+        {13, 0, 11, 7, 4, 9, 1, 10, 14, 3, 5, 12, 2, 15, 8, 6},
+        {1, 4, 11, 13, 12, 3, 7, 14, 10, 15, 6, 8, 0, 5, 9, 2},
+        {6, 11, 13, 8, 1, 4, 10, 7, 9, 5, 0, 15, 14, 2, 3, 12}
+    };
+
+    unsigned char sb8[][16] = {
+        {13, 2, 8, 4, 6, 15, 11, 1, 10, 9, 3, 14, 5, 0, 12, 7},
+        {1, 15, 13, 8, 10, 3, 7, 4, 12, 5, 6, 11, 0, 14, 9, 2},
+        {7, 11, 4, 1, 9, 12, 14, 2, 0, 6, 10, 13, 15, 3, 5, 8},
+        {2, 1, 14, 7, 4, 10, 8, 13, 15, 12, 9, 0, 3, 5, 6, 11}
+    };
+
+    unsigned int output = 0x00000000;
+    input <<= 16;
+    //printf("\n input to sboxes %016lx damn %016lx", input, (input&0x8000000000000000)>>63);
+
+    for(int i=0; i<8; i++){
+
+        //extract the next six bits from the input
+        //the interpret bits 0 and 5 as the row
+        //interpret bits 1,2,3,4 as the column
+        //get the correct value from the correct sbox table
+        //add the result to the output
+        unsigned char row = 0x00;
+        unsigned char column = 0x00;
+
+        row += (input & 0x8000000000000000)>>63;
+        row<<=1;
+        input <<=1; 
+
+        column += (input & 0x8000000000000000)>>63;
+        column <<= 1;
+        input<<=1;
+
+        column += (input & 0x8000000000000000)>>63;
+        column<<=1;
+        input<<=1;
+        
+        column += (input & 0x8000000000000000)>>63;
+        column<<=1;
+        input<<=1;
+
+        column += (input & 0x8000000000000000)>>63;
+        input<<=1;
+
+        row += (input & 0x8000000000000000)>>63;
+        input<<=1;
+
+        if(i == 0) {
+            output += sb1[row][column]&0x0f;
+            output<<=4;
+            //printf("\n row %02x column %d, res %02x", row, column, sb1[row][column]);
+        }
+        else if(i==1){
+            output += sb2[row][column]&0x0f;
+            output<<=4;
+        }
+        else if(i==2){
+            output += sb3[row][column]&0x0f;
+            output<<=4;
+        }
+        else if(i==3){
+            output += sb4[row][column]&0x0f;
+            output<<=4;
+        }
+        else if(i==4){
+            output += sb5[row][column]&0x0f;
+            output<<=4;
+        }
+        else if(i==5){
+            output += sb6[row][column]&0x0f;
+            output<<=4;
+        }
+        else if(i==6){
+            output += sb7[row][column]&0x0f;
+            output<<=4;
+        }
+        else if(i==7){
+            output += sb8[row][column]&0x0f;
+        }
+        //printf("\n the result of sboxes is %08x ", output);
+
+    }
+
+    return output;
+
 }
