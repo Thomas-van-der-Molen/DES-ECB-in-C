@@ -16,6 +16,7 @@ unsigned long * finalPermutation(int, unsigned long *);
 unsigned int feistelFunction(unsigned int, unsigned long);
 unsigned long feistelExpansion(unsigned int);
 unsigned int sBoxes(unsigned long);
+unsigned int feistelPermutation(unsigned int);
 
 int main(int argc, char *argv[]){
     
@@ -43,8 +44,9 @@ int main(int argc, char *argv[]){
 
     unsigned long temp = (*roundKeys)^(temp2);
     printf("\n %016lx xor %016lx is %016lx ",*roundKeys, temp2, temp);
-    sBoxes(temp);
-
+    unsigned int temp3 = sBoxes(temp);
+    printf("\n in main result of sboxes is %08x", temp3);
+    feistelPermutation(temp3);
 
     return 0;
 }
@@ -409,7 +411,7 @@ unsigned long feistelExpansion(unsigned int halfBlock){
         expansionResult <<= 1;
         expansionResult += bitValue;
     }
-    printf("\n the expansion result is %016lx ", expansionResult);
+    //printf("\n the expansion result is %016lx ", expansionResult);
     return expansionResult;
 }
 
@@ -548,4 +550,31 @@ unsigned int sBoxes(unsigned long input){
 
     return output;
 
+}
+
+unsigned int feistelPermutation(unsigned int input){
+
+    int permutationIndices[] = {16, 7, 20, 21, 29, 12, 28, 17,
+                                1, 15, 23, 26, 5, 18, 31, 10,
+                                2, 8, 24, 14, 32, 27, 3, 9,
+                                19, 13, 30, 6, 22, 11, 4, 25};
+
+    //printf("\n input to feistel permutation is %08x ", input);
+    unsigned int output = 0x00000000;
+    unsigned char * pointer = (unsigned char *)&input;
+    for(int i=0; i<32; i++){
+
+        int bit = permutationIndices[i];
+        bit--;
+        unsigned char bitValue = pointer[3 - (int)floor(bit/8)];
+        bitValue >>= 7 - (bit%8);
+        bitValue &= 0x01;
+        //printf("\nthe byte must be %d which is %x ",((int)floor(bit/8)), pointer[7 - (int)floor(bit/8)]);
+        //printf("just confirming %x", bitValue);
+        output <<= 1;
+        output += bitValue;
+    }
+
+    //printf("\n the output of feistel permutation %08x\n", output);
+    return output;
 }
