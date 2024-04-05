@@ -13,40 +13,19 @@ unsigned long * GenerateRoundKeys(unsigned long);
 unsigned long * getUserPlaintext(int *);
 unsigned long * initialPermutation(int, unsigned long *);
 unsigned long * finalPermutation(int, unsigned long *);
+void encrypt();
+void decrypt();
 unsigned int feistelFunction(unsigned int, unsigned long);
 unsigned long feistelExpansion(unsigned int);
 unsigned int sBoxes(unsigned long);
 unsigned int feistelPermutation(unsigned int);
+void userMenu();
 
 int main(int argc, char *argv[]){
     
     srand(time(NULL));
 
-    //generate the key
-    unsigned long long key = generateKey();
-    //generate the key for the first round
-    //key = shiftRoundKey(key, 1);
-    unsigned long * roundKeys = GenerateRoundKeys(key);
-
-    
-    int NumberOfPlaintextBlocks;
-    unsigned long * plaintextBlocks = getUserPlaintext(&NumberOfPlaintextBlocks);
-    /*for(int i=0; i<NumberOfPlaintextBlocks; i++){
-        printf("\n %016lx",*(testingText+i));
-    }*/
-
-    plaintextBlocks = initialPermutation(NumberOfPlaintextBlocks, plaintextBlocks);
-
-    //test the feistel expansion function
-    unsigned int rightHalf = *(unsigned int *)plaintextBlocks;
-    unsigned long temp2 = feistelExpansion(rightHalf);
-
-
-    unsigned long temp = (*roundKeys)^(temp2);
-    printf("\n %016lx xor %016lx is %016lx ",*roundKeys, temp2, temp);
-    unsigned int temp3 = sBoxes(temp);
-    printf("\n in main result of sboxes is %08x", temp3);
-    feistelPermutation(temp3);
+    userMenu();
 
     return 0;
 }
@@ -373,7 +352,36 @@ unsigned long * finalPermutation(int numBlocks, unsigned long * block){
     return outputBlocks;
 }
 
-void encrypt(int numBlocks, unsigned long * block){
+void encrypt(){
+    
+    //generate the key
+    unsigned long long key = generateKey();
+    //generate the key for the first round
+    //key = shiftRoundKey(key, 1);
+    unsigned long * roundKeys = GenerateRoundKeys(key);
+
+    
+    int NumberOfPlaintextBlocks;
+    unsigned long * plaintextBlocks = getUserPlaintext(&NumberOfPlaintextBlocks);
+    /*for(int i=0; i<NumberOfPlaintextBlocks; i++){
+        printf("\n %016lx",*(testingText+i));
+    }*/
+
+    plaintextBlocks = initialPermutation(NumberOfPlaintextBlocks, plaintextBlocks);
+
+    //test the feistel expansion function
+    unsigned int rightHalf = *(unsigned int *)plaintextBlocks;
+    unsigned long temp2 = feistelExpansion(rightHalf);
+
+
+    unsigned long temp = (*roundKeys)^(temp2);
+    printf("\n %016lx xor %016lx is %016lx ",*roundKeys, temp2, temp);
+    unsigned int temp3 = sBoxes(temp);
+    printf("\n in main result of sboxes is %08x", temp3);
+    feistelPermutation(temp3);
+}
+
+void decrypt(){
 
 }
 
@@ -577,4 +585,24 @@ unsigned int feistelPermutation(unsigned int input){
 
     //printf("\n the output of feistel permutation %08x\n", output);
     return output;
+}
+
+void userMenu(){
+
+    int userChoice=0;
+
+    while(userChoice != 3){
+
+        printf("---DES encryption/decryption menu---\n");
+        printf("1. encrypt\n");
+        printf("2. decrypt\n");
+        printf("3. quit\n");
+        scanf("%d",&userChoice);
+        if(userChoice == 1){
+            encrypt();
+        }
+        else if(userChoice == 2){
+            decrypt();
+        }
+    }
 }
