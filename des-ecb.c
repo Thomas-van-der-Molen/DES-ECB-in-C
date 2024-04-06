@@ -11,11 +11,11 @@ unsigned long permutedChoiceTwo(unsigned long);
 unsigned long shiftRoundKey(unsigned long, int);
 unsigned long * GenerateRoundKeys(unsigned long);
 unsigned long * getUserPlaintext(int *);
+unsigned long * getUserCiphertext(int *);
 unsigned long initialPermutation(unsigned long);
 unsigned long finalPermutation(unsigned long);
 void encrypt();
 void decrypt();
-unsigned int feistelFunction(unsigned int, unsigned long);
 unsigned long feistelExpansion(unsigned int);
 unsigned int sBoxes(unsigned long);
 unsigned int feistelPermutation(unsigned int);
@@ -215,8 +215,8 @@ unsigned long * getUserPlaintext(int * PointerToNumOfPlaintextBlocks){
     //a common issue when using the fgets function, the last character in the string will be '\n' which needs to be replaced with 0
     input[strlen(input)-1] = 0;
 
-    printf("\nThe input was %s\n", input);
-    printf("String length is %ld which is %ld bits", strlen(input), strlen(input)*8);
+    //printf("\nThe input was %s\n", input);
+    //printf("String length is %ld which is %ld bits", strlen(input), strlen(input)*8);
     
     //add padding
     int paddingNeeded = 8 - strlen(input)%8;
@@ -255,6 +255,32 @@ unsigned long * getUserPlaintext(int * PointerToNumOfPlaintextBlocks){
     //return the plaintext blocks
     return plaintextBlocks;
 
+}
+
+unsigned long * getUserCiphertext(int * PointerToNumOfPlaintextBlocks){
+    
+    printf("\n enter the ciphertext ");
+    char cipherText[400];
+
+    fgets(cipherText, sizeof(cipherText)-8, stdin);
+    //printf("\n absolute lunacy %ld", (strlen(cipherText)-1)/16);
+    //printf("\n I am going mad %ld", strlen(cipherText));
+    int numCipherBlocks = (strlen(cipherText)-1)/16;
+    *PointerToNumOfPlaintextBlocks = numCipherBlocks;
+    unsigned long * cipherBlocks = (unsigned long *)malloc(sizeof(unsigned long) * numCipherBlocks);
+
+    //printf("\n block one %016lx ", block);
+    for(int i=0; i<numCipherBlocks; i++){
+        
+        char * temp;
+        char tempStr[18];
+        strncpy(tempStr, cipherText+(16*i), 16);
+        unsigned long temp2 = strtoul(tempStr, &temp, 16);
+        *(cipherBlocks+i)=temp2;
+    }
+
+    //printf("\nDon't worry, the segmentation fault isn't in the cipher text input function\n");
+    return cipherBlocks;
 }
 
 //this function will perform the initial permutation for the plaintext input
@@ -359,6 +385,7 @@ void encrypt(){
         printf("\n %016lx",*(testingText+i));
     }*/
 
+    printf("\n the encrypted text: \n");
 
     //for each block of the text input
     for(int block=0; block<NumberOfPlaintextBlocks; block++){
@@ -407,25 +434,97 @@ void encrypt(){
         //after the final round, the halves are swapped
         nextBlock = (((unsigned long)rightHalf)<<32) + leftHalf;
         nextBlock = finalPermutation(nextBlock);
-        printf("\n\n the encrypted block %016lx ", nextBlock);
+        printf("%016lx", nextBlock);
         //end with final permutation, output the block
         //unsigned long finalEncryption = finalPermutation();
-
     }
 }
 
 void decrypt(){
 
+    //decryption is the same as encryption, but the round keys are used in reverse
+
+    //first, get the key from the user
+    printf("\nEnter the decryption key ");
+    unsigned long userKey;
+    scanf("%lx", &userKey);
+
+    //I hate scanf
+    char garbage[20];
+    fgets(garbage, 20, stdin);
+
+    unsigned long * roundKeys = GenerateRoundKeys(userKey);
+
+    //get the ciphertext from the user
+    int NumberOfCipherBlocks;
+    unsigned long * cipherBlocks = getUserCiphertext(&NumberOfCipherBlocks);
+    
+    //for each block of the text input
+    for(int block=0; block<NumberOfCipherBlocks; block++){
+
+        //start with initial permutation
+        unsigned long nextBlock = initialPermutation(*(cipherBlocks+block));
+
+        unsigned int rightHalf = *(unsigned int*)&nextBlock;
+        unsigned int leftHalf = *(((unsigned int*)&nextBlock)+1);
+        
+        //do 16 rounds of the encryption
+        for(int round=0; round<16; round++){
+
+            //if the round is an even number, input the right half to the feistel function, and xor with the left half
+            
+            if(round % 2 == 0){
+
+                //--feistel function on the right half
+                unsigned long temp = feistelExpansion(rightHalf);
+                unsigned long temp2 = (*(roundKeys + 15 -round))^(temp);
+                unsigned int temp3 = sBoxes(temp2);
+                unsigned int fiestelFunctionResult = feistelPermutation(temp3);
+                //--feistel function on the right half
+
+                //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
+                //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
+                leftHalf ^= fiestelFunctionResult;
+                //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+            }
+            else{
+               //--feistel function on the right half
+                unsigned long temp = feistelExpansion(leftHalf);
+                unsigned long temp2 = (*(roundKeys+ 15 -round))^(temp);
+                unsigned int temp3 = sBoxes(temp2);
+                unsigned int fiestelFunctionResult = feistelPermutation(temp3);
+                //--feistel function on the right half
+
+                //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
+                //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
+                rightHalf ^= fiestelFunctionResult;
+                //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+            }
+
+        }
+
+        //after the final round, the halves are swapped
+        nextBlock = (((unsigned long)rightHalf)<<32) + leftHalf;
+        nextBlock = finalPermutation(nextBlock);
+        //printf("\nthe decrypted block %016lx ", nextBlock);
+        char * outputString = (char *)&nextBlock;
+        for(int i=0; i<8; i++){
+            printf("%c", *(outputString+7-i));
+        }
+        
+        //end with final permutation, output the block
+        //unsigned long finalEncryption = finalPermutation();
+    }
+
+    //after the decryption is done, the bytes representing characters need to be turned back into a string.
+    //convertPlainHexToString();
+
 }
 
-//The input to the feistel function is a 32 bit half block and a 48 bit round key
-//The output is a 32 bit half block which is used in the next round
-unsigned int feistelFunction(unsigned int halfBlock, unsigned long roundKey){
-    //first, the half block needs to be expanded to 48 bits
-    //Then, XOR the half block with the the roundKey
-    //Then, do S-boxes
-    //Then, do the feistel permutation
+void convertPlainHexToString(){
+
 }
+
 
 //The input to the feistel expansion function is a 32 bit half block
 //the output is a 48 bit sequence
@@ -623,20 +722,21 @@ unsigned int feistelPermutation(unsigned int input){
 void userMenu(){
 
     int userChoice=0;
-    encrypt();
-    /*while(userChoice != 3){
+    //encrypt();
+    while(userChoice != 3){
 
-        printf("---DES encryption/decryption menu---\n");
+        printf("\n---DES encryption/decryption menu---\n");
         printf("1. encrypt\n");
         printf("2. decrypt\n");
         printf("3. quit\n");
-        char * garbage;
-        scanf("%d",&userChoice);
+        char input[10];
+        fgets(input, 10, stdin);
+        userChoice = atoi(input);
         if(userChoice == 1){
             encrypt();
         }
         else if(userChoice == 2){
             decrypt();
         }
-    }*/
+    }
 }
