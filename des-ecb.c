@@ -4,6 +4,8 @@
 #include <string.h>
 #include <time.h>
 #include <math.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
 unsigned long generateKey();
 unsigned long permutedChoiceOne(unsigned long);
@@ -369,6 +371,7 @@ unsigned long finalPermutation(unsigned long block){
     return outputBlock;
 }
 
+
 void encrypt(){
     
     //generate the key
@@ -390,54 +393,66 @@ void encrypt(){
     //for each block of the text input
     for(int block=0; block<NumberOfPlaintextBlocks; block++){
 
-        //start with initial permutation
-        unsigned long nextBlock = initialPermutation(*(plaintextBlocks+block));
+        int pid = fork();
+        if(pid == 0){
 
-        unsigned int rightHalf = *(unsigned int*)&nextBlock;
-        unsigned int leftHalf = *(((unsigned int*)&nextBlock)+1);
-        
-        //do 16 rounds of the encryption
-        for(int round=0; round<16; round++){
+            //start with initial permutation
+            unsigned long nextBlock = initialPermutation(*(plaintextBlocks+block));
 
-            //if the round is an even number, input the right half to the feistel function, and xor with the left half
+            unsigned int rightHalf = *(unsigned int*)&nextBlock;
+            unsigned int leftHalf = *(((unsigned int*)&nextBlock)+1);
             
-            if(round % 2 == 0){
+            //do 16 rounds of the encryption
+            for(int round=0; round<16; round++){
 
-                //--feistel function on the right half
-                unsigned long temp = feistelExpansion(rightHalf);
-                unsigned long temp2 = (*(roundKeys+round))^(temp);
-                unsigned int temp3 = sBoxes(temp2);
-                unsigned int fiestelFunctionResult = feistelPermutation(temp3);
-                //--feistel function on the right half
+                //if the round is an even number, input the right half to the feistel function, and xor with the left half
+                
+                if(round % 2 == 0){
 
-                //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
-                //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
-                leftHalf ^= fiestelFunctionResult;
-                //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+                    //--feistel function on the right half
+                    unsigned long temp = feistelExpansion(rightHalf);
+                    unsigned long temp2 = (*(roundKeys+round))^(temp);
+                    unsigned int temp3 = sBoxes(temp2);
+                    unsigned int fiestelFunctionResult = feistelPermutation(temp3);
+                    //--feistel function on the right half
+
+                    //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
+                    //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
+                    leftHalf ^= fiestelFunctionResult;
+                    //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+                }
+                else{
+                //--feistel function on the right half
+                    unsigned long temp = feistelExpansion(leftHalf);
+                    unsigned long temp2 = (*(roundKeys+round))^(temp);
+                    unsigned int temp3 = sBoxes(temp2);
+                    unsigned int fiestelFunctionResult = feistelPermutation(temp3);
+                    //--feistel function on the right half
+
+                    //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
+                    //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
+                    rightHalf ^= fiestelFunctionResult;
+                    //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+                }
             }
-            else{
-               //--feistel function on the right half
-                unsigned long temp = feistelExpansion(leftHalf);
-                unsigned long temp2 = (*(roundKeys+round))^(temp);
-                unsigned int temp3 = sBoxes(temp2);
-                unsigned int fiestelFunctionResult = feistelPermutation(temp3);
-                //--feistel function on the right half
 
-                //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
-                //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
-                rightHalf ^= fiestelFunctionResult;
-                //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
-            }
-
+            //after the final round, the halves are swapped
+            nextBlock = (((unsigned long)rightHalf)<<32) + leftHalf;
+            nextBlock = finalPermutation(nextBlock);
+            printf("%016lx", nextBlock);
+            //end with final permutation, output the block
+            //unsigned long finalEncryption = finalPermutation();
+            exit(0);
         }
 
-        //after the final round, the halves are swapped
-        nextBlock = (((unsigned long)rightHalf)<<32) + leftHalf;
-        nextBlock = finalPermutation(nextBlock);
-        printf("%016lx", nextBlock);
-        //end with final permutation, output the block
-        //unsigned long finalEncryption = finalPermutation();
+
     }
+
+    //parent process must wait for blocks to be encrypted
+    for(int block=0; block<NumberOfPlaintextBlocks; block++){
+        wait(NULL);
+    }
+
 }
 
 void decrypt(){
@@ -462,69 +477,72 @@ void decrypt(){
     //for each block of the text input
     for(int block=0; block<NumberOfCipherBlocks; block++){
 
-        //start with initial permutation
-        unsigned long nextBlock = initialPermutation(*(cipherBlocks+block));
+        int pid = fork();
+        if(pid==0){
 
-        unsigned int rightHalf = *(unsigned int*)&nextBlock;
-        unsigned int leftHalf = *(((unsigned int*)&nextBlock)+1);
-        
-        //do 16 rounds of the encryption
-        for(int round=0; round<16; round++){
+            //start with initial permutation
+            unsigned long nextBlock = initialPermutation(*(cipherBlocks+block));
 
-            //if the round is an even number, input the right half to the feistel function, and xor with the left half
+            unsigned int rightHalf = *(unsigned int*)&nextBlock;
+            unsigned int leftHalf = *(((unsigned int*)&nextBlock)+1);
             
-            if(round % 2 == 0){
+            //do 16 rounds of the encryption
+            for(int round=0; round<16; round++){
 
-                //--feistel function on the right half
-                unsigned long temp = feistelExpansion(rightHalf);
-                unsigned long temp2 = (*(roundKeys + 15 -round))^(temp);
-                unsigned int temp3 = sBoxes(temp2);
-                unsigned int fiestelFunctionResult = feistelPermutation(temp3);
-                //--feistel function on the right half
+                //if the round is an even number, input the right half to the feistel function, and xor with the left half
+                
+                if(round % 2 == 0){
 
-                //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
-                //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
-                leftHalf ^= fiestelFunctionResult;
-                //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+                    //--feistel function on the right half
+                    unsigned long temp = feistelExpansion(rightHalf);
+                    unsigned long temp2 = (*(roundKeys + 15 -round))^(temp);
+                    unsigned int temp3 = sBoxes(temp2);
+                    unsigned int fiestelFunctionResult = feistelPermutation(temp3);
+                    //--feistel function on the right half
+
+                    //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
+                    //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
+                    leftHalf ^= fiestelFunctionResult;
+                    //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+                }
+                else{
+                //--feistel function on the right half
+                    unsigned long temp = feistelExpansion(leftHalf);
+                    unsigned long temp2 = (*(roundKeys+ 15 -round))^(temp);
+                    unsigned int temp3 = sBoxes(temp2);
+                    unsigned int fiestelFunctionResult = feistelPermutation(temp3);
+                    //--feistel function on the right half
+
+                    //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
+                    //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
+                    rightHalf ^= fiestelFunctionResult;
+                    //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+                }
+
             }
-            else{
-               //--feistel function on the right half
-                unsigned long temp = feistelExpansion(leftHalf);
-                unsigned long temp2 = (*(roundKeys+ 15 -round))^(temp);
-                unsigned int temp3 = sBoxes(temp2);
-                unsigned int fiestelFunctionResult = feistelPermutation(temp3);
-                //--feistel function on the right half
 
-                //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
-                //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
-                rightHalf ^= fiestelFunctionResult;
-                //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+            //after the final round, the halves are swapped
+            nextBlock = (((unsigned long)rightHalf)<<32) + leftHalf;
+            nextBlock = finalPermutation(nextBlock);
+            //printf("\nthe decrypted block %016lx ", nextBlock);
+            //after the decryption is done, the bytes representing characters need to be turned back into a string.
+            char * outputString = (char *)&nextBlock;
+            for(int i=0; i<8; i++){
+                printf("%c", *(outputString+7-i));
             }
-
-        }
-
-        //after the final round, the halves are swapped
-        nextBlock = (((unsigned long)rightHalf)<<32) + leftHalf;
-        nextBlock = finalPermutation(nextBlock);
-        //printf("\nthe decrypted block %016lx ", nextBlock);
-        char * outputString = (char *)&nextBlock;
-        for(int i=0; i<8; i++){
-            printf("%c", *(outputString+7-i));
+            exit(0);
         }
         
         //end with final permutation, output the block
         //unsigned long finalEncryption = finalPermutation();
     }
 
-    //after the decryption is done, the bytes representing characters need to be turned back into a string.
-    //convertPlainHexToString();
+    //parent process waits for blocks to be decrypted before continuing program
+    for(int block=0; block<NumberOfCipherBlocks; block++){
+        wait(NULL);
+    }
 
 }
-
-void convertPlainHexToString(){
-
-}
-
 
 //The input to the feistel expansion function is a 32 bit half block
 //the output is a 48 bit sequence
