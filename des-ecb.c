@@ -11,8 +11,8 @@ unsigned long permutedChoiceTwo(unsigned long);
 unsigned long shiftRoundKey(unsigned long, int);
 unsigned long * GenerateRoundKeys(unsigned long);
 unsigned long * getUserPlaintext(int *);
-unsigned long * initialPermutation(int, unsigned long *);
-unsigned long * finalPermutation(int, unsigned long *);
+unsigned long initialPermutation(unsigned long);
+unsigned long finalPermutation(unsigned long);
 void encrypt();
 void decrypt();
 unsigned int feistelFunction(unsigned int, unsigned long);
@@ -266,7 +266,7 @@ unsigned long * getUserPlaintext(int * PointerToNumOfPlaintextBlocks){
     The function returns the same data structure as the "block" input - a pointer representing an array of 8 byte blocks after the initial permutation is done
     My implementation of DES is electronic code book mode, so each block is just treated separately for simplicity
 */
-unsigned long * initialPermutation(int numBlocks, unsigned long * block){
+unsigned long initialPermutation(unsigned long block){
 
     int ipIndices[] = {58, 50, 42, 34, 26, 18, 10, 2,
                     60, 52, 44, 36, 28, 20, 12, 4,
@@ -277,39 +277,36 @@ unsigned long * initialPermutation(int numBlocks, unsigned long * block){
                     61, 53, 45, 37, 29, 21, 13, 5,
                     63, 55, 47, 39, 31, 23, 15, 7};
 
-    unsigned long * outputBlocks = (unsigned long *)malloc(sizeof(unsigned long)*numBlocks);
+    unsigned long outputBlock;
     //ECB mode, need to do the initial permutation for all blocks, but separately
-    for(int b=0; b<numBlocks; b++){
-        unsigned long blockInput = *(block+b);
-        unsigned long outputBlock = 0x0000000000000000;
-
-        for(int i=0; i<64; i++){
-
-            int bit = ipIndices[i];
-            //DES algorithm starts counting bits at 1 but it is easier to start counting at 0, so just subtract 1 from what the bit should be
-            bit--;
-            unsigned char * pointer = (unsigned char *)&blockInput;
-            unsigned char bitValue = pointer[7 - (int)floor(bit/8)];
-            //printf(" \n byte %d is %x ", 7-(int)floor(bit/8), bitValue);
-            //printf("\n want bit %d which is in byte %d which is %02x", bit, (int)floor(bit/8), bitValue);
-
-            //again, it is best to start counting bits at 0, rather than 1 so shift left by 7, rather than 8
-            bitValue >>= 7 - (bit%8);
-            bitValue &= 0x01;
-
-            outputBlock <<= 1;
-            outputBlock += bitValue;
-            
-            outputBlocks[b] = outputBlock;
-
-        }
-        
-    }
     
-    return outputBlocks;
+    unsigned long blockInput = block;
+    outputBlock = 0x0000000000000000;
+
+    for(int i=0; i<64; i++){
+
+        int bit = ipIndices[i];
+        //DES algorithm starts counting bits at 1 but it is easier to start counting at 0, so just subtract 1 from what the bit should be
+        bit--;
+        unsigned char * pointer = (unsigned char *)&blockInput;
+        unsigned char bitValue = pointer[7 - (int)floor(bit/8)];
+        //printf(" \n byte %d is %x ", 7-(int)floor(bit/8), bitValue);
+        //printf("\n want bit %d which is in byte %d which is %02x", bit, (int)floor(bit/8), bitValue);
+
+        //again, it is best to start counting bits at 0, rather than 1 so shift left by 7, rather than 8
+        bitValue >>= 7 - (bit%8);
+        bitValue &= 0x01;
+
+        outputBlock <<= 1;
+        outputBlock += bitValue;
+
+    }
+    //printf("\n in initial permutation func, result of initial permutation is %016lx", outputBlock);
+    
+    return outputBlock;
 }
 
-unsigned long * finalPermutation(int numBlocks, unsigned long * block){
+unsigned long finalPermutation(unsigned long block){
 
     int ipIndices[] = {40, 8, 48, 16, 56, 24, 64, 32,
                     39, 7, 47, 15, 55, 23, 63, 31,
@@ -320,36 +317,30 @@ unsigned long * finalPermutation(int numBlocks, unsigned long * block){
                     34, 2, 42, 10, 50, 18, 58, 26,
                     33, 1, 41, 9, 49, 17, 57, 25};
 
-    unsigned long * outputBlocks = (unsigned long *)malloc(sizeof(unsigned long)*numBlocks);
-    //ECB mode, need to do the initial permutation for all blocks, but separately
-    for(int b=0; b<numBlocks; b++){
-        unsigned long blockInput = *(block+b);
-        unsigned long outputBlock = 0x0000000000000000;
+    
+    unsigned long blockInput = block;
+    unsigned long outputBlock = 0x0000000000000000;
 
-        for(int i=0; i<64; i++){
+    for(int i=0; i<64; i++){
 
-            int bit = ipIndices[i];
-            //DES algorithm starts counting bits at 1 but it is easier to start counting at 0, so just subtract 1 from what the bit should be
-            bit--;
-            unsigned char * pointer = (unsigned char *)&blockInput;
-            unsigned char bitValue = pointer[7 - (int)floor(bit/8)];
-            //printf(" \n byte %d is %x ", 7-(int)floor(bit/8), bitValue);
-            //printf("\n want bit %d which is in byte %d which is %02x", bit, (int)floor(bit/8), bitValue);
+        int bit = ipIndices[i];
+        //DES algorithm starts counting bits at 1 but it is easier to start counting at 0, so just subtract 1 from what the bit should be
+        bit--;
+        unsigned char * pointer = (unsigned char *)&blockInput;
+        unsigned char bitValue = pointer[7 - (int)floor(bit/8)];
+        //printf(" \n byte %d is %x ", 7-(int)floor(bit/8), bitValue);
+        //printf("\n want bit %d which is in byte %d which is %02x", bit, (int)floor(bit/8), bitValue);
 
-            //again, it is best to start counting bits at 0, rather than 1 so shift left by 7, rather than 8
-            bitValue >>= 7 - (bit%8);
-            bitValue &= 0x01;
+        //again, it is best to start counting bits at 0, rather than 1 so shift left by 7, rather than 8
+        bitValue >>= 7 - (bit%8);
+        bitValue &= 0x01;
 
-            outputBlock <<= 1;
-            outputBlock += bitValue;
-            
-            outputBlocks[b] = outputBlock;
-
-        }
+        outputBlock <<= 1;
+        outputBlock += bitValue;
         
     }
     
-    return outputBlocks;
+    return outputBlock;
 }
 
 void encrypt(){
@@ -363,22 +354,64 @@ void encrypt(){
     
     int NumberOfPlaintextBlocks;
     unsigned long * plaintextBlocks = getUserPlaintext(&NumberOfPlaintextBlocks);
+
     /*for(int i=0; i<NumberOfPlaintextBlocks; i++){
         printf("\n %016lx",*(testingText+i));
     }*/
 
-    plaintextBlocks = initialPermutation(NumberOfPlaintextBlocks, plaintextBlocks);
 
-    //test the feistel expansion function
-    unsigned int rightHalf = *(unsigned int *)plaintextBlocks;
-    unsigned long temp2 = feistelExpansion(rightHalf);
+    //for each block of the text input
+    for(int block=0; block<NumberOfPlaintextBlocks; block++){
 
+        //start with initial permutation
+        unsigned long nextBlock = initialPermutation(*(plaintextBlocks+block));
 
-    unsigned long temp = (*roundKeys)^(temp2);
-    printf("\n %016lx xor %016lx is %016lx ",*roundKeys, temp2, temp);
-    unsigned int temp3 = sBoxes(temp);
-    printf("\n in main result of sboxes is %08x", temp3);
-    feistelPermutation(temp3);
+        unsigned int rightHalf = *(unsigned int*)&nextBlock;
+        unsigned int leftHalf = *(((unsigned int*)&nextBlock)+1);
+        
+        //do 16 rounds of the encryption
+        for(int round=0; round<16; round++){
+
+            //if the round is an even number, input the right half to the feistel function, and xor with the left half
+            
+            if(round % 2 == 0){
+
+                //--feistel function on the right half
+                unsigned long temp = feistelExpansion(rightHalf);
+                unsigned long temp2 = (*(roundKeys+round))^(temp);
+                unsigned int temp3 = sBoxes(temp2);
+                unsigned int fiestelFunctionResult = feistelPermutation(temp3);
+                //--feistel function on the right half
+
+                //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
+                //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
+                leftHalf ^= fiestelFunctionResult;
+                //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+            }
+            else{
+               //--feistel function on the right half
+                unsigned long temp = feistelExpansion(leftHalf);
+                unsigned long temp2 = (*(roundKeys+round))^(temp);
+                unsigned int temp3 = sBoxes(temp2);
+                unsigned int fiestelFunctionResult = feistelPermutation(temp3);
+                //--feistel function on the right half
+
+                //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
+                //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
+                rightHalf ^= fiestelFunctionResult;
+                //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+            }
+
+        }
+
+        //after the final round, the halves are swapped
+        nextBlock = (((unsigned long)rightHalf)<<32) + leftHalf;
+        nextBlock = finalPermutation(nextBlock);
+        printf("\n\n the encrypted block %016lx ", nextBlock);
+        //end with final permutation, output the block
+        //unsigned long finalEncryption = finalPermutation();
+
+    }
 }
 
 void decrypt(){
@@ -590,13 +623,14 @@ unsigned int feistelPermutation(unsigned int input){
 void userMenu(){
 
     int userChoice=0;
-
-    while(userChoice != 3){
+    encrypt();
+    /*while(userChoice != 3){
 
         printf("---DES encryption/decryption menu---\n");
         printf("1. encrypt\n");
         printf("2. decrypt\n");
         printf("3. quit\n");
+        char * garbage;
         scanf("%d",&userChoice);
         if(userChoice == 1){
             encrypt();
@@ -604,5 +638,5 @@ void userMenu(){
         else if(userChoice == 2){
             decrypt();
         }
-    }
+    }*/
 }
