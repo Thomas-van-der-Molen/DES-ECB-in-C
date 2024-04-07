@@ -16,8 +16,10 @@ unsigned long * getUserPlaintext(int *);
 unsigned long * getUserCiphertext(int *);
 unsigned long initialPermutation(unsigned long);
 unsigned long finalPermutation(unsigned long);
-void encrypt();
-void decrypt();
+void encryptECB();
+void decryptECB();
+void encryptCBC();
+void decryptCBC();
 unsigned long feistelExpansion(unsigned int);
 unsigned int sBoxes(unsigned long);
 unsigned int feistelPermutation(unsigned int);
@@ -41,7 +43,7 @@ unsigned long generateKey(){
 
     key = (((long)rand())<<32) + (int)rand();
 
-    printf("\n the random key %016lx \n", key);    
+    printf("\nYour encryption key is: %016lx \n", key);    
     
     return key;
 }
@@ -210,7 +212,7 @@ unsigned long * getUserPlaintext(int * PointerToNumOfPlaintextBlocks){
     //Due to ascii encoding, a character can be stored as a byte so the input length in bytes is the same as strlen of the input
     char input[400];
 
-    printf("Enter plaintext ");
+    printf("Enter plaintext \n");
     //The user will not be allowed to use the whole input buffer, so that padding will always be possible
     fgets(input, sizeof(input)-8, stdin);
 
@@ -261,7 +263,7 @@ unsigned long * getUserPlaintext(int * PointerToNumOfPlaintextBlocks){
 
 unsigned long * getUserCiphertext(int * PointerToNumOfPlaintextBlocks){
     
-    printf("\n enter the ciphertext ");
+    printf("\nenter the ciphertext \n");
     char cipherText[400];
 
     fgets(cipherText, sizeof(cipherText)-8, stdin);
@@ -372,7 +374,7 @@ unsigned long finalPermutation(unsigned long block){
 }
 
 
-void encrypt(){
+void encryptECB(){
     
     //generate the key
     unsigned long long key = generateKey();
@@ -388,7 +390,7 @@ void encrypt(){
         printf("\n %016lx",*(testingText+i));
     }*/
 
-    printf("\n the encrypted text: \n");
+    printf("\nEncryption result: \n");
 
     //for each block of the text input
     for(int block=0; block<NumberOfPlaintextBlocks; block++){
@@ -455,7 +457,7 @@ void encrypt(){
 
 }
 
-void decrypt(){
+void decryptECB(){
 
     //decryption is the same as encryption, but the round keys are used in reverse
 
@@ -542,6 +544,177 @@ void decrypt(){
         wait(NULL);
     }
 
+}
+
+void encryptCBC(){
+
+    //cbc is the same as ECB, but first XOR the plaintext block with an IV
+    //XOR the next plaintext block with the ciphertext of the last block
+
+    unsigned long initializationVector;
+    initializationVector = (((long)rand())<<32) + (int)rand();
+    printf("\nYour IV is %016lx \n", initializationVector);
+
+    //generate the key
+    unsigned long long key = generateKey();
+    //generate the key for the first round
+    //key = shiftRoundKey(key, 1);
+    unsigned long * roundKeys = GenerateRoundKeys(key);
+
+    
+    int NumberOfPlaintextBlocks;
+    unsigned long * plaintextBlocks = getUserPlaintext(&NumberOfPlaintextBlocks);
+
+    /*for(int i=0; i<NumberOfPlaintextBlocks; i++){
+        printf("\n %016lx",*(testingText+i));
+    }*/
+
+    printf("\nEncryption result: \n");
+
+    //for each block of the text input
+    for(int block=0; block<NumberOfPlaintextBlocks; block++){
+
+        //start with initial permutation
+        unsigned long nextBlock = initializationVector ^ *(plaintextBlocks+block);
+        nextBlock = initialPermutation(nextBlock);
+
+        //xor with IV or previous block
+
+        unsigned int rightHalf = *(unsigned int*)&nextBlock;
+        unsigned int leftHalf = *(((unsigned int*)&nextBlock)+1);
+        
+        //do 16 rounds of the encryption
+        for(int round=0; round<16; round++){
+
+            //if the round is an even number, input the right half to the feistel function, and xor with the left half
+            
+            if(round % 2 == 0){
+
+                //--feistel function on the right half
+                unsigned long temp = feistelExpansion(rightHalf);
+                unsigned long temp2 = (*(roundKeys+round))^(temp);
+                unsigned int temp3 = sBoxes(temp2);
+                unsigned int fiestelFunctionResult = feistelPermutation(temp3);
+                //--feistel function on the right half
+
+                //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
+                //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
+                leftHalf ^= fiestelFunctionResult;
+                //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+            }
+            else{
+            //--feistel function on the right half
+                unsigned long temp = feistelExpansion(leftHalf);
+                unsigned long temp2 = (*(roundKeys+round))^(temp);
+                unsigned int temp3 = sBoxes(temp2);
+                unsigned int fiestelFunctionResult = feistelPermutation(temp3);
+                //--feistel function on the right half
+
+                //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
+                //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
+                rightHalf ^= fiestelFunctionResult;
+                //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+            }
+        }
+
+        //after the final round, the halves are swapped
+        nextBlock = (((unsigned long)rightHalf)<<32) + leftHalf;
+        nextBlock = finalPermutation(nextBlock);
+        //set the block output so that the next block will be xored with this block
+        initializationVector = nextBlock;
+        printf("%016lx", nextBlock);
+        //end with final permutation, output the block
+        //unsigned long finalEncryption = finalPermutation();
+
+    }
+
+}
+
+void decryptCBC(){
+
+    //decryption is the same as encryption, but the round keys are used in reverse
+
+    //first, get the key from the user
+    printf("\nEnter the decryption key ");
+    unsigned long userKey;
+    scanf("%lx", &userKey);
+    //I hate scanf
+    char garbage[20];
+    fgets(garbage, 20, stdin);
+
+    printf("\nEnter the initialization Vector ");
+    unsigned long initializationVector;
+    unsigned long nextRoundIV;
+    scanf("%lx", &initializationVector);
+    fgets(garbage, 20, stdin);
+
+    unsigned long * roundKeys = GenerateRoundKeys(userKey);
+
+    //get the ciphertext from the user
+    int NumberOfCipherBlocks;
+    unsigned long * cipherBlocks = getUserCiphertext(&NumberOfCipherBlocks);
+    
+    //for each block of the text input
+    for(int block=0; block<NumberOfCipherBlocks; block++){
+
+        //start with initial permutation
+        nextRoundIV = *(cipherBlocks+block);
+        unsigned long nextBlock = initialPermutation(*(cipherBlocks+block));
+
+        unsigned int rightHalf = *(unsigned int*)&nextBlock;
+        unsigned int leftHalf = *(((unsigned int*)&nextBlock)+1);
+        
+        //do 16 rounds of the encryption
+        for(int round=0; round<16; round++){
+
+            //if the round is an even number, input the right half to the feistel function, and xor with the left half
+            
+            if(round % 2 == 0){
+
+                //--feistel function on the right half
+                unsigned long temp = feistelExpansion(rightHalf);
+                unsigned long temp2 = (*(roundKeys + 15 -round))^(temp);
+                unsigned int temp3 = sBoxes(temp2);
+                unsigned int fiestelFunctionResult = feistelPermutation(temp3);
+                //--feistel function on the right half
+
+                //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
+                //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
+                leftHalf ^= fiestelFunctionResult;
+                //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+            }
+            else{
+            //--feistel function on the right half
+                unsigned long temp = feistelExpansion(leftHalf);
+                unsigned long temp2 = (*(roundKeys+ 15 -round))^(temp);
+                unsigned int temp3 = sBoxes(temp2);
+                unsigned int fiestelFunctionResult = feistelPermutation(temp3);
+                //--feistel function on the right half
+
+                //printf("\n inputs left %08x right %08x roundkey %016lx \n", leftHalf, rightHalf, *(roundKeys+round));
+                //printf("\n outputs E(R) %016lx \nkey xor expansion %016lx \nsboxes %08x",temp, temp2, temp3);
+                rightHalf ^= fiestelFunctionResult;
+                //printf("\npermutation %08x final xor %08x",fiestelFunctionResult, leftHalf);
+            }
+
+        }
+
+        //after the final round, the halves are swapped
+        nextBlock = (((unsigned long)rightHalf)<<32) + leftHalf;
+        nextBlock = finalPermutation(nextBlock);
+        nextBlock ^= initializationVector;
+        initializationVector = nextRoundIV;
+        //printf("\nthe decrypted block %016lx ", nextBlock);
+        //after the decryption is done, the bytes representing characters need to be turned back into a string.
+        char * outputString = (char *)&nextBlock;
+        for(int i=0; i<8; i++){
+            printf("%c", *(outputString+7-i));
+        }
+    
+    
+        //end with final permutation, output the block
+        //unsigned long finalEncryption = finalPermutation();
+    }
 }
 
 //The input to the feistel expansion function is a 32 bit half block
@@ -741,20 +914,28 @@ void userMenu(){
 
     int userChoice=0;
     //encrypt();
-    while(userChoice != 3){
+    while(userChoice != 5){
 
         printf("\n---DES encryption/decryption menu---\n");
-        printf("1. encrypt\n");
-        printf("2. decrypt\n");
-        printf("3. quit\n");
+        printf("1. encrypt - ECB\n");
+        printf("2. decrypt - ECB\n");
+        printf("3. encrypt - CBC\n");
+        printf("4. decrypt - CBC\n");
+        printf("5. quit\n");
         char input[10];
         fgets(input, 10, stdin);
         userChoice = atoi(input);
         if(userChoice == 1){
-            encrypt();
+            encryptECB();
         }
         else if(userChoice == 2){
-            decrypt();
+            decryptECB();
+        }
+        else if(userChoice == 3){
+            encryptCBC();
+        }
+        else if(userChoice == 4){
+            decryptCBC();
         }
     }
 }
